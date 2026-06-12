@@ -117,20 +117,23 @@ def _surface(ax, W: torch.Tensor, stride: int, title: str, subtitle: str,
 # Auto-find layer with max baseline std
 # ─────────────────────────────────────────────────────────────────────────────
 
-def find_max_std_layer(model, handler):
+def find_max_kurtosis_layer(model, handler):
     layers = handler.get_layers(model)
-    best = dict(std=-1.0, layer_idx=-1, name="")
+    best = dict(kurtosis=-999.0, layer_idx=-1, name="")
 
     for layer_idx, layer in enumerate(layers):
         for name, linear in handler.get_linear_layers(layer).items():
             W = linear.weight.data.float()
-            std = W.std().item()
-            if std > best["std"]:
-                best = dict(std=std, layer_idx=layer_idx, name=name)
+            flat = W.flatten()
+            mu = flat.mean()
+            sigma = flat.std().clamp(min=1e-8)
+            kurt = (((flat - mu) / sigma) ** 4).mean().item() - 3.0
+            if kurt > best["kurtosis"]:
+                best = dict(kurtosis=kurt, layer_idx=layer_idx, name=name)
         print(f"  scanned layer {layer_idx:2d} ...", end="\r", file=sys.stderr)
 
     print(file=sys.stderr)
-    return best["layer_idx"], best["name"], best["std"]
+    return best["layer_idx"], best["name"], best["kurtosis"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -158,9 +161,9 @@ def main():
 
     # ── Select target layer ────────────────────────────────────────────────
     if args.layer is None or args.sublayer is None:
-        print("Scanning layers for max baseline std ...", file=sys.stderr)
-        layer_idx, sublayer_name, max_std = find_max_std_layer(model, handler)
-        print(f"  → layer {layer_idx} / {sublayer_name}  (std={max_std:.4f})", file=sys.stderr)
+        print("Scanning layers for max baseline kurtosis ...", file=sys.stderr)
+        layer_idx, sublayer_name, max_kurt = find_max_kurtosis_layer(model, handler)
+        print(f"  → layer {layer_idx} / {sublayer_name}  (kurtosis={max_kurt:.4f})", file=sys.stderr)
         if args.layer is not None:
             layer_idx = args.layer
         if args.sublayer is not None:
