@@ -54,8 +54,8 @@ python quantize.py meta-llama/Llama-2-7b-hf \
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--bits` | `4` | Quantization bits (2/3/4/8) |
-| `--group_size` | `-1` | Columns per group. `-1` = per-row scale (one scale per output channel). `128` = per-row-group scale |
-| `--rotation_first` | off | Apply Hadamard **before** Sinkhorn (had → gh). Default: Sinkhorn first (gh → had, recommended) |
+| `--group_size` | `-1` | 그룹 크기. `-1` = per-row scale (출력 채널당 1개 scale). `128` = per-row-group scale |
+| `--rotation_first` | off | Hadamard를 Sinkhorn보다 **먼저** 적용 (had → gh). 기본값: Sinkhorn 먼저 (gh → had, 권장) |
 | `--sinkhorn` / `--no_sinkhorn` | on | Sinkhorn row/col normalization before quantization |
 | `--hadamard_rotation` | off | Randomized Hadamard rotation for incoherence |
 | `--percdamp` | `0.01` | Hessian damping ratio |
@@ -102,7 +102,7 @@ quantized_model/
 | Field | Type | Shape | Description |
 |-------|------|-------|-------------|
 | `Q` | int8 | (out, in) | Quantized indices in `[-maxq, maxq]` |
-| `scales` | fp16 | (out,) or (out, n_groups) | Per-row or per-row-group scale |
+| `scales` | fp16 | (out,) or (out, n_groups) | 출력 채널별 또는 그룹별 scale |
 | `g` | fp16 | (out,) | Sinkhorn row scale |
 | `h` | fp16 | (in,) | Sinkhorn col scale |
 | `had_d` | int8 | (in,) | Hadamard ±1 sign vector |
