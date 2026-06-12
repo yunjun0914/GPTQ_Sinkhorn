@@ -186,6 +186,10 @@ def main():
     gh_orig, gh_mid, gh_final   = make_stages_gh_then_had(W)   # gh → had
     hg_orig, hg_mid, hg_final   = make_stages_had_then_gh(W)   # had → gh
 
+    # stats always from original W (not abs); abs only affects the surface plot
+    gh_stats = [gh_orig, gh_mid, gh_final]
+    hg_stats = [hg_orig, hg_mid, hg_final]
+
     if args.abs:
         gh_orig, gh_mid, gh_final = gh_orig.abs(), gh_mid.abs(), gh_final.abs()
         hg_orig, hg_mid, hg_final = hg_orig.abs(), hg_mid.abs(), hg_final.abs()
@@ -210,18 +214,18 @@ def main():
     col_labels_hg  = ["Original W", "After Hadamard  had(W)", "After Sinkhorn  had(W)/g'/h'"]
 
     panels = [
-        # (row, stages_list, col_titles)
-        (0, [gh_orig, gh_mid, gh_final], col_labels_gh),
-        (1, [hg_orig, hg_mid, hg_final], col_labels_hg),
+        # (row, plot_stages, stat_stages, col_titles)
+        (0, [gh_orig, gh_mid, gh_final], gh_stats, col_labels_gh),
+        (1, [hg_orig, hg_mid, hg_final], hg_stats, col_labels_hg),
     ]
 
-    for row_idx, (row, stages, col_labels) in enumerate(panels):
-        for col_idx, (stage_W, col_label) in enumerate(zip(stages, col_labels)):
+    for row_idx, (row, stages, stats_stages, col_labels) in enumerate(panels):
+        for col_idx, (stage_W, stat_W, col_label) in enumerate(zip(stages, stats_stages, col_labels)):
             ax_idx = row_idx * 3 + col_idx + 1
             ax = fig.add_subplot(2, 3, ax_idx, projection="3d")
 
             title    = col_label
-            subtitle = _stats_str(stage_W)
+            subtitle = _stats_str(stat_W)  # always original W for stats
 
             _surface(ax, stage_W, stride, title, subtitle,
                      elev=args.elev, azim=args.azim)
