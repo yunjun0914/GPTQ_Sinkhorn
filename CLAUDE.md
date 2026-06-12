@@ -52,7 +52,7 @@ W, H = 2·X^T·X / N
 | Field      | Type  | Shape                         | Description                         |
 |------------|-------|-------------------------------|-------------------------------------|
 | `Q`        | int8  | (out, in)                     | Symmetric quantized indices         |
-| `scales`   | fp16  | (in,) or (out, n_groups)      | Per-column or per-row-group scale   |
+| `scales`   | fp16  | (out,) or (out, n_groups)     | Per-row or per-row-group scale      |
 | `g`        | fp16  | (out,)                        | Sinkhorn row scale                  |
 | `h`        | fp16  | (in,)                         | Sinkhorn col scale                  |
 | `had_d`    | int8  | (in,)                         | Hadamard ±1 sign vector             |

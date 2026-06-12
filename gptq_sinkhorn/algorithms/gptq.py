@@ -34,8 +34,9 @@ def _column_wise_gptq(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """GPTQ column-wise quantization with symmetric RTN.
 
-    group_size=-1 : per-column scale — one scalar per column, shared across all rows.
-                    scales shape: (in_features,)
+    group_size=-1 : per-row scale — one scale per output channel, standard GPTQ convention.
+                    Pre-computed from W before the GPTQ loop.
+                    scales shape: (out_features,)
     group_size>0  : per-row-group scale — each row has its own scale per group of columns.
                     Scales are pre-computed from the normalized W before GPTQ.
                     scales shape: (out_features, n_groups)
@@ -50,7 +51,9 @@ def _column_wise_gptq(
     W_q = torch.zeros_like(W)
 
     if group_size == -1:
-        scales = torch.zeros(in_dim, device=W.device, dtype=torch.float32)
+        # Per-row (per-output-channel) scale: each row uses its own max, pre-computed.
+        # Avoids one row's outlier dominating the scale of all other rows in a column.
+        scales = W.abs().amax(dim=1).clamp(min=1e-8) / maxq  # (out,)
     else:
         n_groups = (in_dim + group_size - 1) // group_size
         scales = torch.zeros(out_dim, n_groups, device=W.device, dtype=torch.float32)
@@ -71,13 +74,12 @@ def _column_wise_gptq(
             col = W1[:, j]
 
             if group_size == -1:
-                scale = col.abs().max().clamp(min=1e-8) / maxq
-                scales[col_idx] = scale
+                scale = scales              # (out_dim,) — same per-row scale for all columns
                 q = (col / scale).round().clamp(-maxq, maxq)
                 wq = q * scale
             else:
                 gk = col_idx // group_size
-                scale = scales[:, gk]           # (out_dim,)
+                scale = scales[:, gk]      # (out_dim,)
                 q = (col / scale).round().clamp(-maxq, maxq)
                 wq = q * scale
 
@@ -236,7 +238,7 @@ def dequantize_layer(quant_data: QuantizedLayerData) -> torch.Tensor:
     out_dim, in_dim = Q.shape
 
     if quant_data.group_size == -1:
-        W_q = Q * scales[None, :]
+        W_q = Q * scales[:, None]  # (out,1): per-row scale
     else:
         group_size = quant_data.group_size
         n_groups = scales.shape[1]
