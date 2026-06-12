@@ -145,7 +145,7 @@ def main():
     p.add_argument("model_path")
     p.add_argument("--layer",    type=int,   default=None, help="Layer index (auto if omitted)")
     p.add_argument("--sublayer", type=str,   default=None, help="Sublayer name e.g. self_attn.q_proj")
-    p.add_argument("--stride",   type=int,   default=16,   help="Subsample stride (default 16 → 256×256)")
+    p.add_argument("--stride",   type=int,   default=1,    help="Subsample stride (default 1 → full 4096×4096)")
     p.add_argument("--elev",     type=int,   default=30)
     p.add_argument("--azim",     type=int,   default=-60)
     p.add_argument("--out",      type=str,   default="weight_transform_viz.png")

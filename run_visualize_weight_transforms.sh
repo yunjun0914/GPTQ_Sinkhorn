@@ -18,7 +18,7 @@ mkdir -p ~/GPTQ_Sinkhorn/logs
 cd ~/GPTQ_Sinkhorn
 
 python visualize_weight_transforms.py $MODEL \
-    --stride 16 \
+    --stride 1 \
     --elev 30 --azim -60 \
     --out $OUT
 
