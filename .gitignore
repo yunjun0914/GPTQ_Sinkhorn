@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Outputs and logs
+outputs/
+logs/
+*.out
+*.err
+
+# Calibration cache
+calib_*.pt
+
+# Model checkpoints
+*.pt
+*.safetensors
+*.bin
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
