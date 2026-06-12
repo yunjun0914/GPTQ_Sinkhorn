@@ -134,31 +134,30 @@ def gptq_quantize(
     group_size: int = -1,
     sinkhorn: bool = True,
     hadamard_rotation: bool = False,
+    rotation_first: bool = False,
     layer_name: str = "",
 ) -> QuantizedLayerData:
     """GPTQ quantization with optional Sinkhorn normalization and Hadamard rotation.
 
-    Pipeline:
+    rotation_first=False (default):  gh → rotation
         W, H
-        → comp_gh(W)                [if sinkhorn]   Sinkhorn → g, h
+        → comp_gh(W)              [if sinkhorn]   Sinkhorn → g, h
         → W /= g·h,  H *= h²
-        → Hadamard rotation(W, H)   [if hadamard]   incoherence
-        → GPTQ column-wise + sym RTN
+        → Hadamard(W, H)          [if hadamard]   incoherence
+        → GPTQ
+
+    rotation_first=True:            rotation → gh
+        W, H
+        → Hadamard(W, H)          [if hadamard]   incoherence
+        → comp_gh(W_rot)          [if sinkhorn]   Sinkhorn on rotated weights
+        → W_rot /= g·h,  H_rot *= h²
+        → GPTQ
     """
     device = W_orig.device
     H = H_orig.detach().clone().float()
     W = W_orig.detach().clone().float()
 
-    # Sinkhorn normalization
-    if sinkhorn:
-        g, h = comp_gh(W)
-        W = W / g[:, None] / h[None, :]
-        H = H * h[:, None] * h[None, :]
-    else:
-        g = torch.ones(W.shape[0], device=device)
-        h = torch.ones(W.shape[1], device=device)
-
-    # Dead weight handling (zero diagonal in H → column never activated)
+    # Dead weight handling before any transforms
     dead = torch.diag(H) == 0
     H[dead, dead] = 1
     W[:, dead] = 0
@@ -175,8 +174,33 @@ def gptq_quantize(
         )
         hadK_col, had_K_col = get_hadK(W.shape[1])
         had_d = make_had_d(W.shape[1], device, seed=0)
-        W = apply_had_to_W_single(W, had_d, hadK_col, had_K_col)
-        H = apply_had_to_H_single(H, had_d, hadK_col, had_K_col)
+
+    if rotation_first:
+        # 1. Hadamard first
+        if hadamard_rotation:
+            W = apply_had_to_W_single(W, had_d, hadK_col, had_K_col)
+            H = apply_had_to_H_single(H, had_d, hadK_col, had_K_col)
+        # 2. Sinkhorn on rotated weights
+        if sinkhorn:
+            g, h = comp_gh(W)
+            W = W / g[:, None] / h[None, :]
+            H = H * h[:, None] * h[None, :]
+        else:
+            g = torch.ones(W.shape[0], device=device)
+            h = torch.ones(W.shape[1], device=device)
+    else:
+        # 1. Sinkhorn first
+        if sinkhorn:
+            g, h = comp_gh(W)
+            W = W / g[:, None] / h[None, :]
+            H = H * h[:, None] * h[None, :]
+        else:
+            g = torch.ones(W.shape[0], device=device)
+            h = torch.ones(W.shape[1], device=device)
+        # 2. Hadamard on normalized weights
+        if hadamard_rotation:
+            W = apply_had_to_W_single(W, had_d, hadK_col, had_K_col)
+            H = apply_had_to_H_single(H, had_d, hadK_col, had_K_col)
 
     H_inv = _compute_H_inv(H, dead, h, percdamp, sinkhorn, layer_name)
 
@@ -192,16 +216,20 @@ def gptq_quantize(
         bias=None,
         had_d=had_d.cpu() if had_d is not None else None,
         had_K_col=had_K_col,
+        rotation_first=rotation_first,
     )
 
 
 def dequantize_layer(quant_data: QuantizedLayerData) -> torch.Tensor:
     """Reconstruct fp16 weights from QuantizedLayerData.
 
-    Inverse of gptq_quantize:
-        W_q = Q * scales
-        → undo Hadamard  [if had_d is set]
-        → W = W_q * g * h
+    Inverse of gptq_quantize — order depends on rotation_first:
+
+    rotation_first=False (gh → rotation):
+        Q * scales → undo_had → * g · h
+
+    rotation_first=True  (rotation → gh):
+        Q * scales → * g · h → undo_had
     """
     Q = quant_data.Q.float()
     scales = quant_data.scales.float()
@@ -218,16 +246,24 @@ def dequantize_layer(quant_data: QuantizedLayerData) -> torch.Tensor:
             g_end = min(g_start + group_size, in_dim)
             W_q[:, g_start:g_end] = Q[:, g_start:g_end] * scales[:, k : k + 1]
 
-    if quant_data.had_d is not None:
-        from ..utils.hadamard import apply_inverse_had_to_W_single, get_hadK
-
-        device = W_q.device
-        had_d = quant_data.had_d.to(device)
-        hadK_col, _ = get_hadK(in_dim)
-        W_q = apply_inverse_had_to_W_single(W_q, had_d, hadK_col, quant_data.had_K_col)
-
     g = quant_data.g.float().to(W_q.device)
     h = quant_data.h.float().to(W_q.device)
-    W = W_q * g[:, None] * h[None, :]
 
-    return W.half()
+    def _undo_had(X):
+        from ..utils.hadamard import apply_inverse_had_to_W_single, get_hadK
+        had_d = quant_data.had_d.to(X.device)
+        hadK_col, _ = get_hadK(in_dim)
+        return apply_inverse_had_to_W_single(X, had_d, hadK_col, quant_data.had_K_col)
+
+    if quant_data.rotation_first:
+        # rotation → gh 순서: gh 먼저 되돌리고, 그 다음 회전 되돌리기
+        W_q = W_q * g[:, None] * h[None, :]
+        if quant_data.had_d is not None:
+            W_q = _undo_had(W_q)
+    else:
+        # gh → rotation 순서: 회전 먼저 되돌리고, 그 다음 gh 되돌리기
+        if quant_data.had_d is not None:
+            W_q = _undo_had(W_q)
+        W_q = W_q * g[:, None] * h[None, :]
+
+    return W_q.half()

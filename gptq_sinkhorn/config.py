@@ -21,6 +21,7 @@ class QuantizationConfig:
     calib_dataset: str = "c4"
     sinkhorn: bool = True       # Sinkhorn row/col normalization (comp_gh)
     hadamard_rotation: bool = False
+    rotation_first: bool = False  # True: rotation → gh / False: gh → rotation (default)
     device: str = "cuda"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -37,6 +38,7 @@ class QuantizationConfig:
             "calib_dataset": self.calib_dataset,
             "sinkhorn": self.sinkhorn,
             "hadamard_rotation": self.hadamard_rotation,
+            "rotation_first": self.rotation_first,
             "device": self.device,
         }
 
@@ -65,6 +67,7 @@ class QuantizedLayerData:
     bias: Optional[torch.Tensor] = None
     had_d: Optional[torch.Tensor] = None     # int8 (in,) sign vector for Hadamard
     had_K_col: Optional[int] = None
+    rotation_first: bool = False             # True: rotation → gh / False: gh → rotation
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -81,6 +84,8 @@ class QuantizedLayerData:
             d["had_d"] = self.had_d
         if self.had_K_col is not None:
             d["had_K_col"] = self.had_K_col
+        if self.rotation_first:
+            d["rotation_first"] = self.rotation_first
         return d
 
     @classmethod
@@ -95,6 +100,7 @@ class QuantizedLayerData:
             bias=d.get("bias"),
             had_d=d.get("had_d"),
             had_K_col=d.get("had_K_col"),
+            rotation_first=bool(d.get("rotation_first", False)),
         )
 
     def save(self, path: Path) -> None:

@@ -38,6 +38,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no_sinkhorn", dest="sinkhorn", action="store_false")
     p.add_argument("--hadamard_rotation", action="store_true",
                    help="Apply randomized Hadamard rotation for incoherence")
+    p.add_argument("--rotation_first", action="store_true",
+                   help="Apply Hadamard rotation BEFORE Sinkhorn (default: Sinkhorn first)")
     p.add_argument("--device", default="cuda")
     return p.parse_args()
 
@@ -57,6 +59,7 @@ def main():
         calib_dataset=args.calib_dataset,
         sinkhorn=args.sinkhorn,
         hadamard_rotation=args.hadamard_rotation,
+        rotation_first=args.rotation_first,
         device=args.device,
     )
 
@@ -125,6 +128,7 @@ def main():
                 group_size=cfg.group_size,
                 sinkhorn=cfg.sinkhorn,
                 hadamard_rotation=cfg.hadamard_rotation,
+                rotation_first=cfg.rotation_first,
                 layer_name=f"layer_{layer_idx}.{name}",
             )
             if linear.bias is not None:
