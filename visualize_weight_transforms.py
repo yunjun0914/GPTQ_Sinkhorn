@@ -146,6 +146,7 @@ def main():
     p.add_argument("--layer",    type=int,   default=None, help="Layer index (auto if omitted)")
     p.add_argument("--sublayer", type=str,   default=None, help="Sublayer name e.g. self_attn.q_proj")
     p.add_argument("--stride",   type=int,   default=1,    help="Subsample stride (default 1 → full 4096×4096)")
+    p.add_argument("--abs",      action="store_true",     help="Plot |W| instead of W")
     p.add_argument("--elev",     type=int,   default=30)
     p.add_argument("--azim",     type=int,   default=-60)
     p.add_argument("--out",      type=str,   default="weight_transform_viz.png")
@@ -185,6 +186,10 @@ def main():
     gh_orig, gh_mid, gh_final   = make_stages_gh_then_had(W)   # gh → had
     hg_orig, hg_mid, hg_final   = make_stages_had_then_gh(W)   # had → gh
 
+    if args.abs:
+        gh_orig, gh_mid, gh_final = gh_orig.abs(), gh_mid.abs(), gh_final.abs()
+        hg_orig, hg_mid, hg_final = hg_orig.abs(), hg_mid.abs(), hg_final.abs()
+
     label = f"layer_{layer_idx}.{sublayer_name}"
     stride = args.stride
     n_out_vis = W.shape[0] // stride
@@ -192,9 +197,10 @@ def main():
     print(f"Surface grid: {n_out_vis}×{n_in_vis}  (stride={stride})", file=sys.stderr)
 
     # ── Figure layout: 2 rows × 3 cols ────────────────────────────────────
+    abs_tag = "  |W| (absolute value)" if args.abs else ""
     fig = plt.figure(figsize=(18, 11))
     fig.suptitle(
-        f"Weight Distribution Before GPTQ  —  {label}\n"
+        f"Weight Distribution Before GPTQ  —  {label}{abs_tag}\n"
         f"stride={stride} ({n_out_vis}×{n_in_vis} shown out of {W.shape[0]}×{W.shape[1]})",
         fontsize=11, fontweight="bold", y=0.98
     )

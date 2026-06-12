@@ -22,5 +22,12 @@ python visualize_weight_transforms.py $MODEL \
     --elev 30 --azim -60 \
     --out $OUT
 
-echo "Saved: $OUT"
-send_ch yunjun0914_exp "[DONE] weight viz ($SLURM_JOB_ID) → logs/weight_transform_viz_${SLURM_JOB_ID}.png"
+OUT_ABS=/home/yunjun0914/GPTQ_Sinkhorn/logs/weight_transform_viz_abs_${SLURM_JOB_ID}.png
+python visualize_weight_transforms.py $MODEL \
+    --stride 1 \
+    --abs \
+    --elev 30 --azim -60 \
+    --out $OUT_ABS
+
+echo "Saved: $OUT  and  $OUT_ABS"
+send_ch yunjun0914_exp "[DONE] weight viz ($SLURM_JOB_ID) → weight_transform_viz_${SLURM_JOB_ID}.png + abs version"
