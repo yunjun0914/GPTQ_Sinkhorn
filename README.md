@@ -54,7 +54,8 @@ python quantize.py meta-llama/Llama-2-7b-hf \
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--bits` | `4` | Quantization bits (2/3/4/8) |
-| `--group_size` | `-1` | Columns per group. `-1` = per-column scale (recommended with Sinkhorn). `128` = per-row-group scale |
+| `--group_size` | `-1` | Columns per group. `-1` = per-row scale (one scale per output channel). `128` = per-row-group scale |
+| `--rotation_first` | off | Apply Hadamard **before** Sinkhorn (had → gh). Default: Sinkhorn first (gh → had, recommended) |
 | `--sinkhorn` / `--no_sinkhorn` | on | Sinkhorn row/col normalization before quantization |
 | `--hadamard_rotation` | off | Randomized Hadamard rotation for incoherence |
 | `--percdamp` | `0.01` | Hessian damping ratio |
@@ -101,7 +102,7 @@ quantized_model/
 | Field | Type | Shape | Description |
 |-------|------|-------|-------------|
 | `Q` | int8 | (out, in) | Quantized indices in `[-maxq, maxq]` |
-| `scales` | fp16 | (in,) or (out, n_groups) | Per-column or per-row-group scale |
+| `scales` | fp16 | (out,) or (out, n_groups) | Per-row or per-row-group scale |
 | `g` | fp16 | (out,) | Sinkhorn row scale |
 | `h` | fp16 | (in,) | Sinkhorn col scale |
 | `had_d` | int8 | (in,) | Hadamard ±1 sign vector |
